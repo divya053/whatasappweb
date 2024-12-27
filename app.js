@@ -16,41 +16,41 @@ const upload = multer({ dest: "uploads/" });
 const cors = require('cors');
 let client;
 let clientReady = false;
-
 // Initialize WhatsApp client
 client = new Client({
+let client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: { headless: false },
-   
+    puppeteer: {
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    },
 });
 
 client.initialize();
 app.use(express.json());
 app.use(express.static("public"));
 app.use(cors());
-
 client.on("qr", (qr) => {
     console.log("QR Code received. Please scan it using your WhatsApp.");
+    console.log("QR Code received: ", qr);
 });
 
 client.on("authenticated", () => {
     console.log("WhatsApp client authenticated successfully.");
+    console.log("WhatsApp authenticated successfully!");
 });
 
 client.on("ready", () => {
     console.log("WhatsApp client is ready.");
     clientReady = true;
 });
-
 client.on("disconnected", (reason) => {
     console.log("WhatsApp client disconnected:", reason);
     clientReady = false;
 });
-
 // SQLite database setup
 const db = new sqlite3.Database("./mobileData.db");
 app.use(bodyParser.json());
-
 db.serialize(() => {
     db.run(`
         CREATE TABLE IF NOT EXISTS users (
@@ -59,7 +59,6 @@ db.serialize(() => {
             password TEXT NOT NULL
         )
     `);
-
     db.run(`
         CREATE TABLE IF NOT EXISTS user_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,7 +71,6 @@ db.serialize(() => {
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     `);
-
     db.run(`
         CREATE TABLE IF NOT EXISTS status (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,30 +79,23 @@ db.serialize(() => {
             date TEXT NOT NULL
         )
     `);
-
     // Insert sample users
     db.run(`INSERT OR IGNORE INTO users (username, password) VALUES ('admin', 'admin123')`);
     db.run(`INSERT OR IGNORE INTO users (username, password) VALUES ('user1', 'user123')`);
 });
-
 // Serve static frontend
 app.use(express.static(path.join(__dirname, "./public")));
-
 // Middleware
 app.use(express.json());
-
 // Login Endpoint
 app.post("/login", (req, res) => {
     const { username, password } = req.body;
-
     if (!username || !password) {
         return res.status(400).json({ success: false, message: "Username and password are required." });
     }
-
     const ipAddress = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
     const loginTime = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
     const uniqueSessionId = uuidv4();
-
     db.get(
         "SELECT * FROM users WHERE username = ? AND password = ?",
         [username, password],
@@ -115,7 +106,6 @@ app.post("/login", (req, res) => {
             if (!user) {
                 return res.status(401).json({ success: false, message: "Invalid username or password." });
             }
-
             // Insert session details into user_sessions
             db.run(
                 `INSERT INTO user_sessions (user_id, ip_address, login_time, session_status, unique_sessionid)
@@ -131,16 +121,12 @@ app.post("/login", (req, res) => {
         }
     );
 });
-
 app.post("/logout", (req, res) => {
     const { sessionId } = req.body;
-
     if (!sessionId) {
         return res.status(400).json({ success: false, message: "Session ID is required." });
     }
-
     const logoutTime = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-
     db.run(
         `UPDATE user_sessions SET logout_time = ?, session_status = ? WHERE unique_sessionid = ? AND session_status = ?`,
         [logoutTime, "inactive", sessionId, "active"],
@@ -155,7 +141,6 @@ app.post("/logout", (req, res) => {
         }
     );
 });
-
 // app.post("/upload", upload.single("file"), async (req, res) => {
 //     if (!req.file) {
 //         return res.status(400).json({ success: false, message: "No file uploaded" });
@@ -164,22 +149,17 @@ app.post("/logout", (req, res) => {
 //     if (!clientReady) {
 //         return res.status(500).json({ success: false, message: "WhatsApp Client is not ready. Try again later." });
 //     }
-
 //     const data = await readExcel(filePath);
 //     const outputData = [];
-
 //     // Current date to store with each record
 //     const currentDate = new Date().toISOString();
-
 //     for (const row of data) {
 //         const number = row[0];
 //         const chatId = number.substring(1) + "@c.us";
-
 //         try {
 //             const isRegistered = await client.isRegisteredUser(chatId);
 //             const status = isRegistered ? "Available on WhatsApp" : "Not available on WhatsApp";
 //             outputData.push({ number, status });
-
 //             // Save to database
 //             db.run(
 //                 `INSERT INTO status (number, status, date) VALUES (?, ?, ?)`,
@@ -195,7 +175,6 @@ app.post("/logout", (req, res) => {
 //             outputData.push({ number, status: "Error checking status" });
 //         }
 //     }
-
 //     res.json({ success: true, data: outputData });
 // });
 // Endpoint to upload Excel file
@@ -204,30 +183,24 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, message: "No file uploaded. Please upload a valid Excel file." });
     }
-
     if (!clientReady) {
         return res.status(500).json({
             success: false,
             message: "WhatsApp Client is not ready. Please ensure it is connected and try again.",
         });
     }
-
     const filePath = req.file.path;
     console.log("File uploaded:", filePath); // Check if the file is uploaded
-
     try {
         const data = await readExcel(filePath);
         const outputData = [];
         const currentDate = new Date().toISOString();
-
         for (const row of data) {
             const number = row[0];
             const chatId = number.substring(1) + "@c.us";
-
             try {
                 const isRegistered = await client.isRegisteredUser(chatId);
                 const status = isRegistered ? "Available on WhatsApp" : "Not available on WhatsApp";
-
                 // Save to database
                 db.run(
                     `INSERT INTO status (number, status, date) VALUES (?, ?, ?)`,
@@ -238,14 +211,12 @@ app.post("/upload", upload.single("file"), async (req, res) => {
                         }
                     }
                 );
-
                 outputData.push({ number, status });
             } catch (error) {
                 console.error(`Error processing number ${number}:`, error);
                 outputData.push({ number, status: "Error checking status" });
             }
         }
-
         res.json({ success: true, data: outputData });
     } catch (error) {
         console.error("Error reading the uploaded file:", error);
@@ -262,40 +233,29 @@ app.post("/upload", upload.single("file"), async (req, res) => {
         });
     }
 });
-
 // Endpoint to view complete database content
-
 app.get("/view", (req, res) => {
     db.all("SELECT * FROM status ORDER BY date DESC", (err, rows) => {
         if (err) {
             return res.status(500).json({ success: false, message: "Error fetching data from the database." });
         }
-
         rows.forEach(row => {
             // Using moment-timezone to adjust the date to IST
             const formattedDate = moment(row.date).tz('Asia/Kolkata').format('DD-MM-YYYY HH:mm:ss');
-
             // Update the date field with the formatted value
             row.date = formattedDate;
         });
-
         res.json({ success: true, data: rows });
     });
 });
-
-
-
 app.post("/delete", (req, res) => {
     const { ids } = req.body;
-
     if (!ids || ids.length === 0) {
         return res.status(400).json({ success: false, message: "No IDs provided." });
     }
-
     // Prepare the SQL query for deleting rows
     const placeholders = ids.map(() => "?").join(", ");
     const sql = `DELETE FROM status WHERE id IN (${placeholders})`;
-
     // Execute the query
     db.run(sql, ids, function(err) {
         if (err) {
@@ -303,8 +263,10 @@ app.post("/delete", (req, res) => {
         }
         res.json({ success: true, message: `${this.changes} row(s) deleted.` });
     });
+    console.log("WhatsApp Client is ready!");
 });
 
+client.initialize();
 
 // Start server
 app.listen(1221, () => {
