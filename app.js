@@ -18,14 +18,10 @@ let client;
 let clientReady = false;
 // Initialize WhatsApp client
 client = new Client({
-let client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: { headless: false },
-    puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    },
+   
 });
-
 client.initialize();
 app.use(express.json());
 app.use(express.static("public"));
