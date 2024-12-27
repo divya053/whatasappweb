@@ -2,6 +2,11 @@ const express = require("express");
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const cors = require("cors");
 const path = require("path");
+const puppeteerExtra = require("puppeteer-extra");
+const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+
+// Add stealth plugin to Puppeteer
+puppeteerExtra.use(StealthPlugin());
 
 const app = express();
 let clientReady = false;
@@ -16,13 +21,16 @@ app.use(express.json());
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        headless: false, // Run without GUI
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        executablePath: "/usr/bin/google-chrome", // Path to Chrome/Chromium
+        headless: true, // Run without GUI
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+        puppeteer: puppeteerExtra, // Use PuppeteerExtra with stealth plugin
     },
 });
 
+// Event Listeners
 client.on("qr", (qr) => {
-    console.log("QR Code received.");
+    console.log("QR Code received. Scan it using your WhatsApp app.");
     qrCode = qr;
 });
 
@@ -40,6 +48,8 @@ client.on("disconnected", (reason) => {
 // Initialize WhatsApp Client
 client.initialize();
 
+// API Endpoints
+
 // Endpoint to get the QR code
 app.get("/get-qr-code", (req, res) => {
     if (!qrCode) {
@@ -48,12 +58,13 @@ app.get("/get-qr-code", (req, res) => {
     res.json({ success: true, qrCode });
 });
 
-// Endpoint to check client readiness
+// Endpoint to check if the client is ready
 app.get("/client-ready", (req, res) => {
     res.json({ success: true, clientReady });
 });
 
 // Start the server
-app.listen(1221, () => {
-    console.log("Server running at http://localhost:1221");
+const PORT = 1221;
+app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
 });
