@@ -38,12 +38,7 @@
     <h1>WhatsApp Web on VPS</h1>
     <div id="qr-code">Waiting for QR Code...</div>
     
-    <div class="message-box">
-        <h2>Send a Message</h2>
-        <input type="text" id="phoneNumber" placeholder="Phone Number (e.g. +11234567890)" />
-        <textarea id="message" placeholder="Type your message"></textarea>
-        <button onclick="sendMessage()">Send Message</button>
-    </div>
+   
 
     <script>
         // Connect to WebSocket server
@@ -63,27 +58,7 @@
             document.getElementById('qr-code').appendChild(qrImg);
         };
 
-        // Send WhatsApp message through the API
-        function sendMessage() {
-            const phoneNumber = document.getElementById("phoneNumber").value;
-            const message = document.getElementById("message").value;
-
-            if (!phoneNumber || !message) {
-                alert("Please enter both phone number and message");
-                return;
-            }
-
-            fetch(`/send-message?phoneNumber=${encodeURIComponent(phoneNumber)}&message=${encodeURIComponent(message)}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert("Message sent successfully!");
-                    } else {
-                        alert("Error: " + data.error);
-                    }
-                })
-                .catch(error => alert("Error: " + error));
-        }
+       
     </script>
 </body>
 </html>
