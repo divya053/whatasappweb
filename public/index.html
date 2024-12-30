@@ -3,68 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Web Integration</title>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+    <title>WhatsApp Web on VPS</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            text-align: center;
-        }
-        .container {
             padding: 20px;
+            background-color: #f8f9fa;
         }
-        #qr-code-container {
-            display: none;
+        h1 {
+            color: #007bff;
         }
-        canvas {
-            margin: 20px auto;
+        #qr-code {
+            margin: 20px 0;
+            font-size: 1.2rem;
+            color: #333;
+        }
+        .message-box {
+            margin-top: 20px;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            font-size: 1rem;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>WhatsApp Web Integration</h1>
-        <button onclick="connectClient()">Connect WhatsApp Client</button>
-
-        <div id="qr-code-container">
-            <h3>Scan QR Code</h3>
-            <canvas id="qr-code"></canvas>
-        </div>
+    <h1>WhatsApp Web on VPS</h1>
+    <div id="qr-code">Waiting for QR Code...</div>
+    
+    <div class="message-box">
+        <h2>Send a Message</h2>
+        <input type="text" id="phoneNumber" placeholder="Phone Number (e.g. +11234567890)" />
+        <textarea id="message" placeholder="Type your message"></textarea>
+        <button onclick="sendMessage()">Send Message</button>
     </div>
 
     <script>
-        async function connectClient() {
-            try {
-                // Check if the client is ready
-                const clientResponse = await fetch("http://localhost:1221/client-ready");
-                const clientStatus = await clientResponse.json();
+        // Connect to WebSocket server
+        const socket = new WebSocket('ws://localhost:3000');
 
-                if (clientStatus.clientReady) {
-                    // Redirect to WhatsApp Web if the client is ready
-                    window.location.href = "https://web.whatsapp.com/";
-                } else {
-                    // If not ready, fetch and display the QR Code
-                    const qrResponse = await fetch("http://localhost:1221/get-qr-code");
-                    const qrData = await qrResponse.json();
+        socket.onopen = () => {
+            console.log('WebSocket connection established');
+        };
 
-                    if (qrData.success) {
-                        const qrCodeContainer = document.getElementById("qr-code-container");
-                        qrCodeContainer.style.display = "block";
+        // Handle incoming QR Code from WebSocket
+        socket.onmessage = (event) => {
+            const qrCode = event.data;
+            document.getElementById('qr-code').textContent = "Scan the QR Code to connect with WhatsApp";
+            // Optionally, you can render the QR code in an image element
+            const qrImg = document.createElement('img');
+            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrCode)}&size=200x200`;
+            document.getElementById('qr-code').appendChild(qrImg);
+        };
 
-                        QRCode.toCanvas(document.getElementById("qr-code"), qrData.qrCode, function (error) {
-                            if (error) console.error(error);
-                            console.log("QR Code rendered!");
-                        });
-                    } else {
-                        alert("WhatsApp client is not ready. Please retry.");
-                    }
-                }
-            } catch (error) {
-                console.error("Error connecting client:", error);
-                alert("Failed to connect client. Check console for details.");
+        // Send WhatsApp message through the API
+        function sendMessage() {
+            const phoneNumber = document.getElementById("phoneNumber").value;
+            const message = document.getElementById("message").value;
+
+            if (!phoneNumber || !message) {
+                alert("Please enter both phone number and message");
+                return;
             }
+
+            fetch(`/send-message?phoneNumber=${encodeURIComponent(phoneNumber)}&message=${encodeURIComponent(message)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert("Message sent successfully!");
+                    } else {
+                        alert("Error: " + data.error);
+                    }
+                })
+                .catch(error => alert("Error: " + error));
         }
     </script>
 </body>
