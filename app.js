@@ -1,59 +1,69 @@
-const express = require("express");
-const { Client, LocalAuth } = require("whatsapp-web.js");
-const cors = require("cors");
-const path = require("path");
+const { Client } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+const express = require('express');
+const path = require('path');
+const WebSocket = require('ws');
 
 const app = express();
-let clientReady = false;
-let qrCode = null;
+const client = new Client();
 
-// Middleware
-app.use(cors());
-app.use(express.static(path.join(__dirname, "./public")));
-app.use(express.json());
+// Set up WebSocket server to broadcast QR code to the frontend
+const wss = new WebSocket.Server({ noServer: true });
 
-// Initialize WhatsApp Client
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        headless: true, // Run without GUI
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    },
+// Serve static files (frontend)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Broadcast QR code to all connected WebSocket clients
+client.on('qr', (qr) => {
+    // Generate QR code and send it to the WebSocket clients
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(qr);
+        }
+    });
 });
 
-client.on("qr", (qr) => {
-    console.log("QR Code received.");
-    qrCode = qr;
+// Handle WebSocket connections
+wss.on('connection', (ws) => {
+    console.log('New WebSocket client connected');
+    ws.on('message', (message) => {
+        console.log(`Received message: ${message}`);
+    });
 });
 
-client.on("ready", () => {
-    console.log("WhatsApp client is ready.");
-    clientReady = true;
-    qrCode = null; // Clear QR code once ready
+// Initialize WhatsApp client and handle ready state
+client.on('ready', () => {
+    console.log('WhatsApp is ready!');
 });
 
-client.on("disconnected", (reason) => {
-    console.log("WhatsApp client disconnected:", reason);
-    clientReady = false;
-});
-
-// Initialize WhatsApp Client
+// Initialize the WhatsApp client
 client.initialize();
 
-// Endpoint to get the QR code
-app.get("/get-qr-code", (req, res) => {
-    if (!qrCode) {
-        return res.status(400).json({ success: false, message: "QR Code not available. Please retry." });
+// Handle sending messages
+app.get('/send-message', (req, res) => {
+    const { phoneNumber, message } = req.query;
+    if (!phoneNumber || !message) {
+        return res.status(400).send("Missing phone number or message");
     }
-    res.json({ success: true, qrCode });
+
+    const number = phoneNumber + '@c.us';
+    client.sendMessage(number, message)
+        .then(response => {
+            res.json({ success: true, message: response });
+        })
+        .catch(err => {
+            res.status(500).json({ success: false, error: err });
+        });
 });
 
-// Endpoint to check client readiness
-app.get("/client-ready", (req, res) => {
-    res.json({ success: true, clientReady });
+// Create server with WebSocket support
+const server = app.listen(3000, () => {
+    console.log('Server running on http://localhost:3000');
 });
 
-// Start the server
-app.listen(1221, () => {
-    console.log("Server running at http://localhost:1221");
+// Upgrade the HTTP server to handle WebSocket connections
+server.on('upgrade', (request, socket, head) => {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+    });
 });
