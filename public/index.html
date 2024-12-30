@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Web on VPS</title>
+    <title>WhatsApp Number Checker</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -32,16 +32,56 @@
             border: none;
             cursor: pointer;
         }
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
     <h1>WhatsApp Web on VPS</h1>
     <div id="qr-code">Waiting for QR Code...</div>
-    
-   
+    <!-- Button to trigger the popup -->
+    <button id="showQrButton">Show QR Code</button>
+
+    <!-- Modal Popup -->
+    <div id="qrModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closeModal">&times;</span>
+            <h2>Scan the QR Code to connect with WhatsApp</h2>
+            <div id="qr-code-popup"></div>
+        </div>
+    </div>
 
     <script>
-        // Connect to WebSocket server
+        // WebSocket connection
         const socket = new WebSocket('ws://localhost:3000');
 
         socket.onopen = () => {
@@ -52,13 +92,37 @@
         socket.onmessage = (event) => {
             const qrCode = event.data;
             document.getElementById('qr-code').textContent = "Scan the QR Code to connect with WhatsApp";
-            // Optionally, you can render the QR code in an image element
+
+            // Function to display QR code in popup
             const qrImg = document.createElement('img');
             qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrCode)}&size=200x200`;
-            document.getElementById('qr-code').appendChild(qrImg);
+            
+            // Show the QR code in the modal popup
+            document.getElementById('qr-code-popup').innerHTML = '';
+            document.getElementById('qr-code-popup').appendChild(qrImg);
         };
 
-       
+        // Modal functionality
+        const modal = document.getElementById("qrModal");
+        const showQrButton = document.getElementById("showQrButton");
+        const closeModal = document.getElementById("closeModal");
+
+        // When the button is clicked, show the modal
+        showQrButton.onclick = () => {
+            modal.style.display = "block";
+        };
+
+        // When the user clicks the close button, close the modal
+        closeModal.onclick = () => {
+            modal.style.display = "none";
+        };
+
+        // When the user clicks outside the modal, close it
+        window.onclick = (event) => {
+            if (event.target === modal) {
+                modal.style.display = "none";
+            }
+        };
     </script>
 </body>
 </html>
