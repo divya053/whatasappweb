@@ -23,10 +23,11 @@ let clientReady = false;
 //     puppeteer: { headless: false },
    
 // });
+
+const initializeClient = () => {
     client = new Client({
         authStrategy: new LocalAuth(),
         puppeteer: {
-            executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", // Update this path as per your OS
             headless: false,
             args: [
                 "--no-sandbox",
@@ -36,7 +37,6 @@ let clientReady = false;
             ],
         },
     });
-
 
     client.on("qr", (qr) => {
         console.log("QR Code received. Please scan it using your WhatsApp.");
@@ -58,7 +58,7 @@ let clientReady = false;
 
     // Initialize the client
     client.initialize();
-
+};
 
 // Force logout and cleanup before re-initializing client
 app.get("/connect-whatsapp", async (req, res) => {
