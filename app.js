@@ -39,22 +39,6 @@ client.on('ready', () => {
 // Initialize the WhatsApp client
 client.initialize();
 
-// Handle sending messages
-app.get('/send-message', (req, res) => {
-    const { phoneNumber, message } = req.query;
-    if (!phoneNumber || !message) {
-        return res.status(400).send("Missing phone number or message");
-    }
-
-    const number = phoneNumber + '@c.us';
-    client.sendMessage(number, message)
-        .then(response => {
-            res.json({ success: true, message: response });
-        })
-        .catch(err => {
-            res.status(500).json({ success: false, error: err });
-        });
-});
 
 // Create server with WebSocket support
 const server = app.listen(3000, () => {
