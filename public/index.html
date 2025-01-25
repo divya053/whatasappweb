@@ -454,12 +454,11 @@
         <!-- Header -->
         <header class="header">
                 <div class="header-title">
+                    
                     <h1>WhatsApp Analysis</h1>
                 </div>
-
         
             <div class="profile-section">
-                <button id="connectButton" class="logout-btn">Connect</button>
                 <img src="https://static.vecteezy.com/system/resources/previews/001/840/612/non_2x/picture-profile-icon-male-icon-human-or-people-sign-and-symbol-free-vector.jpg" alt="Profile">
                 <span id="loggedInUser">Username</span>
                 <button id="logoutButton" class="logout-btn">Logout</button>
@@ -602,7 +601,7 @@
             .then(data => {
                 if (data.success) {
                     localStorage.removeItem("sessionId");
-                    window.location.href = "/";  // Redirect to login page after logout
+                    window.location.href = "/login";  // Redirect to login page after logout
                 } else {
                     alert("Logout failed: " + data.message);
                 }
@@ -630,7 +629,7 @@
             const formData = new FormData();
             formData.append("file", fileInput.files[0]);
 
-            const response = await fetch("http://localhost:1221/upload", {
+            const response = await fetch("/upload", {
                 method: "POST",
                 body: formData
             });
@@ -661,7 +660,7 @@
         
         // Save data to the database after upload
         async function saveDataToDatabase(data) {
-            const response = await fetch("http://localhost:1221/save", {
+            const response = await fetch("/save", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ data })
@@ -703,7 +702,7 @@
         }
         // View Database
         viewButton.addEventListener("click", async () => {
-            const response = await fetch("http://localhost:1221/view");
+            const response = await fetch("/view");
             if (response.ok) {
                 const result = await response.json();
                 renderTable(result.data);  // Render the data with the date column
@@ -744,6 +743,7 @@
         document.addEventListener("DOMContentLoaded", function () {
             const selectAllCheckbox = document.getElementById("selectAll"); // "Select All" checkbox
             const dataTable = document.getElementById("dataTable"); // Table body container
+            const deleteButton = document.getElementById("deleteSelected"); // Delete button
         
             // Event listener for "Select All" checkbox
             selectAllCheckbox.addEventListener("change", function () {
@@ -775,7 +775,38 @@
             // Start observing the table body for changes
             observer.observe(dataTable, { childList: true });
         
+            // Delete button functionality
+            deleteButton.addEventListener("click", async () => {
+                const selectedRows = document.querySelectorAll("input.row-checkbox:checked"); // Get all selected checkboxes
         
+                if (selectedRows.length === 0) {
+                    alert("Please select at least one row to delete.");
+                    return;
+                }
+        
+                // Collect the IDs of the selected rows
+                const idsToDelete = Array.from(selectedRows).map(checkbox => checkbox.dataset.id);
+        
+                // Send the IDs to the backend to delete from the database
+                const response = await fetch("/delete", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ ids: idsToDelete })
+                });
+        
+                if (response.ok) {
+                    // Remove rows from the table after successful deletion
+                    selectedRows.forEach(checkbox => {
+                        const row = checkbox.closest("tr");
+                        row.remove();
+                    });
+                    alert("Selected rows deleted successfully.");
+                } else {
+                    alert("Failed to delete rows.");
+                }
+            });
         });
         
         document.getElementById("downloadData").addEventListener("click", () => {
@@ -810,78 +841,10 @@
             });
         });
         
-
-        document.getElementById("deleteSelected").addEventListener("click", function () {
-            const selectedRows = document.querySelectorAll(".row-checkbox:checked");
         
-            if (selectedRows.length === 0) {
-                alert("No rows selected!");
-                return;
-            }
+
         
-            selectedRows.forEach((checkbox) => {
-                const row = checkbox.closest("tr"); // Find the closest row for the checkbox
-                row.remove(); // Remove the row from the table
-            });
-        
-            alert(`${selectedRows.length} row(s) deleted successfully!`);
-        });
 
-      
-
-        // Delete multiple rows (when "Delete Selected Rows" button is clicked)
-        document.getElementById("deleteSelected").addEventListener("click", function () {
-            const selectedRows = document.querySelectorAll(".row-checkbox:checked");
-
-            if (selectedRows.length === 0) {
-                alert("No rows selected!");
-                return;
-            }
-
-            const ids = Array.from(selectedRows).map((checkbox) =>
-                checkbox.closest("tr").getAttribute("data-id")
-            );
-
-            fetch("http://localhost:1221/delete-multiple", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ ids }),
-            })
-                .then((response) => {
-                    if (response.ok) {
-                        selectedRows.forEach((checkbox) => {
-                            const row = checkbox.closest("tr");
-                            row.remove(); // Remove rows from table
-                        });
-                        alert("Selected rows deleted successfully!");
-                    } else {
-                        alert("Failed to delete selected rows.");
-                    }
-                })
-                .catch((error) => {
-                    console.error("Error:", error);
-                    alert("An error occurred while deleting the rows.");
-                });
-        });
-
-        document.getElementById("connectButton").addEventListener("click", function() {
-            fetch('/connect-whatsapp')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        window.open("https://web.whatsapp.com", "_blank"); // Open WhatsApp Web in a new tab when connected
-                    } else {
-                        alert(data.message); // Display error message if not ready
-                    }
-                })
-                .catch(error => {
-                    alert("Error connecting to WhatsApp Web.");
-                });
-        });
-                
-                
 
 
     </script>
