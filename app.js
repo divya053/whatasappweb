@@ -3,80 +3,39 @@ const fs = require("fs");
 const path = require("path");
 const multer = require("multer");
 const readExcel = require("read-excel-file/node");
-const ExcelJS = require("exceljs");
 const sqlite3 = require("sqlite3").verbose();
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const { v4: uuidv4 } = require("uuid");
-const XLSX = require('xlsx');
-const moment = require('moment-timezone');
-const app = express();
+const moment = require("moment-timezone");
+const puppeteer = require('puppeteer'); // Add Puppeteer for launching browser
+const cors = require("cors");
 const bodyParser = require("body-parser");
 
+const app = express();
 const upload = multer({ dest: "uploads/" });
-const cors = require('cors');
 let client;
 let clientReady = false;
 
-// Initialize WhatsApp client
-// client = new Client({
-//     authStrategy: new LocalAuth(),
-//     puppeteer: { headless: false },
-   
-// });
-
-const initializeClient = () => {
-    client = new Client({
-        authStrategy: new LocalAuth(),
-        puppeteer: {
-            headless: false,
-            args: [
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--remote-debugging-port=0", // Ensures no external connections to Puppeteer
-            ],
-        },
-    });
-
-    client.on("qr", (qr) => {
-        console.log("QR Code received. Please scan it using your WhatsApp.");
-    });
-
-    client.on("authenticated", () => {
-        console.log("WhatsApp client authenticated successfully.");
-    });
-
-    client.on("ready", () => {
-        console.log("WhatsApp client is ready.");
-        clientReady = true;
-    });
-
-    client.on("disconnected", (reason) => {
-        console.log("WhatsApp client disconnected:", reason);
-        clientReady = false;
-    });
-
-    // Initialize the client
-    client.initialize();
-};
-
-// Force logout and cleanup before re-initializing client
-app.get("/connect-whatsapp", async (req, res) => {
-    try {
-        if (clientReady) {
-            await client.logout();  // Log out if already logged in
-            console.log("Logged out of WhatsApp client.");
-        }
-
-        // Ensure the client is re-initialized after logout
-        initializeClient();
-        
-        res.status(200).json({ success: true, message: "WhatsApp Web client connected." });
-    } catch (error) {
-        console.error("Error during WhatsApp connection:", error);
-        res.status(500).json({ success: false, message: "Failed to connect to WhatsApp Web." });
-    }
+// Initialize WhatsApp client with Puppeteer configured for localhost only
+client = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        headless: false,  // Set to false to see the browser
+executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe',
+        args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--remote-debugging-port=9222"
+        ],
+    },
 });
+
+client.initialize();
+app.use(express.json());
+app.use(cors({ origin: 'http://try4free.in' }));
+app.use(express.static("public"));
+
 // SQLite database setup
 const db = new sqlite3.Database("./mobileData.db");
 app.use(bodyParser.json());
@@ -112,19 +71,31 @@ db.serialize(() => {
         )
     `);
 
-    // Insert sample users
     db.run(`INSERT OR IGNORE INTO users (username, password) VALUES ('admin', 'admin123')`);
     db.run(`INSERT OR IGNORE INTO users (username, password) VALUES ('user1', 'user123')`);
 });
 
-// Serve static frontend
+// Middleware
 app.use(express.static(path.join(__dirname, "./public")));
 
-// Middleware
-app.use(express.json());
+// WhatsApp Client Events
+client.on("qr", (qr) => {
+    console.log("QR Code received. Please scan it using your WhatsApp.");
+});
 
-// Redirect to WhatsApp Web hosted on the same system
+client.on("authenticated", () => {
+    console.log("WhatsApp client authenticated successfully.");
+});
 
+client.on("ready", () => {
+    console.log("WhatsApp client is ready.");
+    clientReady = true;
+});
+
+client.on("disconnected", (reason) => {
+    console.log("WhatsApp client disconnected:", reason);
+    clientReady = false;
+});
 
 // Login Endpoint
 app.post("/login", (req, res) => {
@@ -149,7 +120,6 @@ app.post("/login", (req, res) => {
                 return res.status(401).json({ success: false, message: "Invalid username or password." });
             }
 
-            // Insert session details into user_sessions
             db.run(
                 `INSERT INTO user_sessions (user_id, ip_address, login_time, session_status, unique_sessionid)
                  VALUES (?, ?, ?, ?, ?)`,
@@ -165,6 +135,7 @@ app.post("/login", (req, res) => {
     );
 });
 
+// Logout Endpoint
 app.post("/logout", (req, res) => {
     const { sessionId } = req.body;
 
@@ -189,51 +160,8 @@ app.post("/logout", (req, res) => {
     );
 });
 
-// app.post("/upload", upload.single("file"), async (req, res) => {
-//     if (!req.file) {
-//         return res.status(400).json({ success: false, message: "No file uploaded" });
-//     }
-//     const filePath = req.file.path;
-//     if (!clientReady) {
-//         return res.status(500).json({ success: false, message: "WhatsApp Client is not ready. Try again later." });
-//     }
-
-//     const data = await readExcel(filePath);
-//     const outputData = [];
-
-//     // Current date to store with each record
-//     const currentDate = new Date().toISOString();
-
-//     for (const row of data) {
-//         const number = row[0];
-//         const chatId = number.substring(1) + "@c.us";
-
-//         try {
-//             const isRegistered = await client.isRegisteredUser(chatId);
-//             const status = isRegistered ? "Available on WhatsApp" : "Not available on WhatsApp";
-//             outputData.push({ number, status });
-
-//             // Save to database
-//             db.run(
-//                 `INSERT INTO status (number, status, date) VALUES (?, ?, ?)`,
-//                 [number, status, currentDate],
-//                 (err) => {
-//                     if (err) {
-//                         console.error(`Error saving number ${number}:`, err);
-//                     }
-//                 }
-//             );
-//         } catch (error) {
-//             console.error(`Error processing number ${number}:`, error);
-//             outputData.push({ number, status: "Error checking status" });
-//         }
-//     }
-
-//     res.json({ success: true, data: outputData });
-// });
-// Endpoint to upload Excel file
+// Upload Excel File and Check WhatsApp Numbers
 app.post("/upload", upload.single("file"), async (req, res) => {
-    console.log("Upload route triggered");  // Add this line to check if the route is hit
     if (!req.file) {
         return res.status(400).json({ success: false, message: "No file uploaded. Please upload a valid Excel file." });
     }
@@ -246,7 +174,6 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     }
 
     const filePath = req.file.path;
-    console.log("File uploaded:", filePath); // Check if the file is uploaded
 
     try {
         const data = await readExcel(filePath);
@@ -261,33 +188,29 @@ app.post("/upload", upload.single("file"), async (req, res) => {
                 const isRegistered = await client.isRegisteredUser(chatId);
                 const status = isRegistered ? "Available on WhatsApp" : "Not available on WhatsApp";
 
-                // Save to database
                 db.run(
                     `INSERT INTO status (number, status, date) VALUES (?, ?, ?)`,
                     [number, status, currentDate],
                     (err) => {
                         if (err) {
-                            console.error(`Error saving number ${number}:`, err); // Log error to debug
+                            console.error(`Error saving number ${number}:`, err);
                         }
                     }
                 );
 
                 outputData.push({ number, status });
             } catch (error) {
-                console.error(`Error processing number ${number}:`, error);
                 outputData.push({ number, status: "Error checking status" });
             }
         }
 
         res.json({ success: true, data: outputData });
     } catch (error) {
-        console.error("Error reading the uploaded file:", error);
         res.status(500).json({
             success: false,
             message: "Error reading the file. Please ensure it is a valid Excel file.",
         });
     } finally {
-        // Clean up uploaded file after processing
         fs.unlink(filePath, (err) => {
             if (err) {
                 console.error("Error deleting uploaded file:", err);
@@ -296,50 +219,59 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     }
 });
 
-// Endpoint to view complete database content
+// Endpoint to open WhatsApp Web in the same host machine's default browser
 
-app.get("/view", (req, res) => {
-    db.all("SELECT * FROM status ORDER BY date DESC", (err, rows) => {
-        if (err) {
-            return res.status(500).json({ success: false, message: "Error fetching data from the database." });
-        }
+// Endpoint to open WhatsApp Web on the server's Chromium
+app.get("/whatsapp", async (req, res) => {
+    if (!clientReady) {
+        return res.status(500).json({
+            success: false,
+            message: "WhatsApp Client is not ready. Please ensure it is connected and try again.",
+        });
+    }
 
-        rows.forEach(row => {
-            // Using moment-timezone to adjust the date to IST
-            const formattedDate = moment(row.date).tz('Asia/Kolkata').format('DD-MM-YYYY HH:mm:ss');
-
-            // Update the date field with the formatted value
-            row.date = formattedDate;
+    try {
+        // Launch Puppeteer with Chromium in headless mode (no GUI)
+        const browser = await puppeteer.launch({
+            headless: true,  // Run Chromium in headless mode (no GUI)
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage'
+            ]
         });
 
+        // Open WhatsApp Web in the server's headless browser
+        const page = await browser.newPage();
+        await page.goto('https://web.whatsapp.com/');
+        
+        // Wait for a few seconds to ensure the page loads
+        await page.waitForTimeout(5000);  // Adjust the timeout if necessary
+
+        // Close the browser after opening WhatsApp Web
+        await browser.close();
+        
+        // Respond to the frontend
+        res.json({ success: true, message: "WhatsApp Web opened successfully on the server." });
+    } catch (error) {
+        console.error("Error opening WhatsApp Web:", error);
+        res.status(500).json({ success: false, message: "Failed to open WhatsApp Web on the server." });
+    }
+});
+app.get("/view", (req, res) => {
+    db.all("SELECT * FROM status", (err, rows) => {
+        if (err) {
+            console.error("Error fetching data:", err);
+            return res.status(500).json({ success: false, message: "Error fetching data." });
+        }
+
+        console.log("Fetched data:", rows);  // Log the rows to ensure data is being fetched
         res.json({ success: true, data: rows });
     });
 });
 
-
-
-app.post("/delete", (req, res) => {
-    const { ids } = req.body;
-
-    if (!ids || ids.length === 0) {
-        return res.status(400).json({ success: false, message: "No IDs provided." });
-    }
-
-    // Prepare the SQL query for deleting rows
-    const placeholders = ids.map(() => "?").join(", ");
-    const sql = `DELETE FROM status WHERE id IN (${placeholders})`;
-
-    // Execute the query
-    db.run(sql, ids, function(err) {
-        if (err) {
-            return res.status(500).json({ success: false, message: "Error deleting data", error: err });
-        }
-        res.json({ success: true, message: `${this.changes} row(s) deleted.` });
-    });
+// Start the Server
+app.listen(1121, () => {
+    console.log("Server running on http://localhost:1121");
 });
 
-
-// Start server
-app.listen(1221, () => {
-    console.log("Server running on http://localhost:1221");
-});  
